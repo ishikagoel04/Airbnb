@@ -1,13 +1,15 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import AddressLink from "../AddressLink";
 import PlaceGallery from "../PlaceGallery";
 import BookingDates from "../BookingDates";
 
 export default function BookingPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [booking, setBooking] = useState(null);
+  
   useEffect(() => {
     if (id) {
       axios.get("/bookings").then((response) => {
@@ -18,6 +20,10 @@ export default function BookingPage() {
       });
     }
   }, [id]);
+
+  const handlePaymentClick = () => {
+    navigate(`/payment/${id}`);
+  };
 
   if (!booking) {
     return "";
@@ -34,7 +40,10 @@ export default function BookingPage() {
           <h2 className="text-2xl mb-4">Your booking information:</h2>
           <BookingDates booking={booking} />
         </div>
-        <div className="bg-primary p-6 text-white rounded-2xl">
+        <div 
+          className="bg-primary p-6 text-white rounded-2xl cursor-pointer hover:bg-primary/90 transition-colors"
+          onClick={handlePaymentClick}
+        >
             <div>Total Price</div> 
             <div className="text-2xl">${booking.price}</div>
         </div>

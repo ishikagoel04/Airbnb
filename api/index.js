@@ -1,8 +1,9 @@
 const express = require("express");
+require("dotenv").config();
 const cors = require("cors");
 const mongoose = require("mongoose");
 const User = require("./models/User");
-const bycrypt = require("bcryptjs");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 // const CookieParser = require('cookie-parser');
 const imageDownloader = require('image-downloader')
@@ -13,11 +14,13 @@ const fs =  require('fs');
 const Booking = require("./models/Booking.js");
 const { resolve } = require("path");
 
-require("dotenv").config();
-const app = express();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-const bycryptSalt = bycrypt.genSaltSync(10);
-const jwtSecret = "fsagdgfgfdfgbgfd";
+
+const app = express();
+const clientUrl = process.env.CLIENT_URL;
+const bcryptSalt = bcrypt.genSaltSync(10);
+const jwtSecret = process.env.JWT_SECRET;
 
 app.use(express.json());
 app.use(cookieParser());
@@ -52,7 +55,7 @@ app.post("/register", async (req, res) => {
     const userDoc = await User.create({
       name,
       email,
-      password: bycrypt.hashSync(password, bycryptSalt),
+      password: bcrypt.hashSync(password, bcryptSalt),
     });
     res.json(userDoc);
   } catch (e) {
@@ -65,7 +68,7 @@ app.post("/login", async (req, res) => {
 
   const userDoc = await User.findOne({ email });
   if (userDoc) {
-    const passOk = bycrypt.compareSync(password, userDoc.password);
+    const passOk = bcrypt.compareSync(password, userDoc.password);
     if (passOk) {
       jwt.sign(
         {
@@ -221,4 +224,36 @@ app.get('/bookings',async (req,res)=>{
   const userData = await getUserDataFromReq(req);
   res.json(await Booking.find({user:userData.id}).populate('place'))
 })
+
+app.post('/create-payment-session', async (req, res) => {
+  const { bookingId, amount } = req.body;
+  
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Booking Payment',
+          },
+          unit_amount: amount * 100, // Stripe uses cents
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.CLIENT_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL}/payment-cancelled`,
+      metadata: {
+        bookingId: bookingId,
+      },
+    });
+
+    res.json({ sessionId: session.id });
+  } catch (error) {
+    console.error('Error creating payment session:', error);
+    res.status(500).json({ error: 'Failed to create payment session' });
+  }
+});
+
 app.listen(4000);
